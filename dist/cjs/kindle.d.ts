@@ -18,6 +18,11 @@ export type KindleConfiguration = {
      * Factory that creates or returns a custom instance of http client.
      */
     clientFactory?: (cookies: KindleRequiredCookies, clientOptions: TlsClientConfig) => HttpClient;
+    /**
+     * Set the number of results to return for initial book fetch.
+     * Default is 50.
+     */
+    querySize?: number;
 };
 export type KindleOptions = {
     config: KindleConfiguration;
