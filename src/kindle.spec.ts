@@ -5,6 +5,7 @@ import { useScenario } from "./__test__/scenario.js";
 import { singleBook } from "./__test__/scenarios/single-book.js";
 import { multiplePages } from "./__test__/scenarios/multiple-pages.js";
 import { startSession } from "./__test__/scenarios/start-session.js";
+import { customQuerySize } from "./__test__/scenarios/custom-query-size.js";
 import { Filter } from "./query-filter.js";
 
 const cookies = process.env.COOKIES;
@@ -82,5 +83,21 @@ describe("pagination", () => {
     // then
     expect(books).toMatchSnapshot();
     expect(books.length).toBe(2);
+  });
+
+  test("should support custom querySize parameter", async () => {
+    // given
+    useScenario(startSession()); // used for initial setup
+    const kindle = await Kindle.fromConfig(config());
+    expect(kindle.defaultBooks.length).toBe(0);
+
+    useScenario(customQuerySize); // used for this test
+
+    // when
+    const books = await kindle.books({ filter: { querySize: 25 } });
+
+    // then
+    expect(books).toMatchSnapshot();
+    expect(books.length).toBe(3);
   });
 });
