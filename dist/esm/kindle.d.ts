@@ -36,9 +36,9 @@ export declare class Kindle {
     #private;
     private options;
     static DEVICE_TOKEN_URL: string;
-    static readonly BOOKS_URL = "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS&sortType=recency";
+    static readonly BOOKS_URL = "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS";
     static readonly DEFAULT_QUERY: Readonly<{
-        sortType: "acquisition_desc";
+        sortType: "recency";
     }>;
     static readonly DEFAULT_FILTER: Readonly<{
         querySize: number;

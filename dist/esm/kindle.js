@@ -131,14 +131,14 @@ Object.defineProperty(Kindle, "BOOKS_URL", {
     enumerable: true,
     configurable: true,
     writable: true,
-    value: "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS&sortType=recency"
+    value: "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS"
 });
 Object.defineProperty(Kindle, "DEFAULT_QUERY", {
     enumerable: true,
     configurable: true,
     writable: true,
     value: Object.freeze({
-        sortType: "acquisition_desc",
+        sortType: "recency",
     })
 });
 Object.defineProperty(Kindle, "DEFAULT_FILTER", {
