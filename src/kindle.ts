@@ -71,7 +71,7 @@ export class Kindle {
   public static readonly BOOKS_URL =
     "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS&sortType=recency";
   public static readonly DEFAULT_QUERY = Object.freeze({
-    sortType: "acquisition_desc",
+    sortType: "recency",
   } satisfies Query);
   public static readonly DEFAULT_FILTER = Object.freeze({
     querySize: 50,
