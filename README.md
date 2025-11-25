@@ -2,6 +2,151 @@
 
 A zero dependency, blazing fast library for Amazon Kindle's private API built without headless browsers.
 
+## How It Works
+
+This library interacts with Amazon Kindle's private APIs through a sophisticated multi-step authentication and session management flow. Below is a high-level overview of the architecture and data flow:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant KindleLib as Kindle Library
+    participant HTTPClient as HTTP Client
+    participant TLSProxy as TLS Client API<br/>(External)
+    participant Amazon as Amazon Kindle APIs
+
+    User->>KindleLib: fromConfig(cookies, deviceToken, tlsServer)
+    
+    Note over KindleLib,Amazon: Step 1: Initial Authentication & Book Fetch
+    KindleLib->>HTTPClient: Create client with cookies
+    HTTPClient->>TLSProxy: POST /api/forward<br/>(with Chrome 112 fingerprint)
+    TLSProxy->>Amazon: GET /kindle-library/search<br/>(cookies, user-agent)
+    Amazon-->>TLSProxy: Books list + session-id cookie
+    TLSProxy-->>HTTPClient: Response with session-id
+    HTTPClient->>HTTPClient: Store session-id for x-amzn-sessionid header
+    
+    Note over KindleLib,Amazon: Step 2: Device Registration
+    HTTPClient->>TLSProxy: POST /api/forward
+    TLSProxy->>Amazon: GET /service/web/register/getDeviceToken<br/>(deviceToken params)
+    Amazon-->>TLSProxy: Device info + deviceSessionToken
+    TLSProxy-->>HTTPClient: Response with deviceSessionToken
+    HTTPClient->>HTTPClient: Store deviceSessionToken for x-adp-session-token header
+    
+    KindleLib-->>User: Kindle instance with initial books
+    
+    Note over User,Amazon: User Interacts with Library
+    
+    User->>KindleLib: kindle.books() or kindle.defaultBooks
+    KindleLib-->>User: Array of KindleBook objects
+    
+    User->>KindleLib: book.details()
+    KindleLib->>HTTPClient: Request with both session headers
+    HTTPClient->>TLSProxy: POST /api/forward
+    TLSProxy->>Amazon: GET /service/mobile/reader/startReading<br/>(with session headers)
+    Amazon-->>TLSProxy: Book metadata + progress info
+    TLSProxy-->>HTTPClient: Response
+    HTTPClient-->>KindleLib: Parsed metadata
+    KindleLib-->>User: KindleBookLightDetails
+    
+    User->>KindleLib: book.fullDetails()
+    KindleLib->>HTTPClient: Request metadata URL (JSONP)
+    HTTPClient->>TLSProxy: POST /api/forward
+    TLSProxy->>Amazon: GET metadataUrl<br/>(JSONP endpoint)
+    Amazon-->>TLSProxy: JSONP response with full book data
+    TLSProxy-->>HTTPClient: Response
+    HTTPClient->>HTTPClient: Parse JSONP wrapper
+    HTTPClient-->>KindleLib: Full metadata (positions, publisher, etc.)
+    KindleLib-->>User: KindleBookDetails with reading progress %
+```
+
+### Key Components
+
+1. **TLS Fingerprint Evasion**: Amazon implemented TLS fingerprinting in July 2023 to detect automated clients. This library uses an external [tls-client-api](https://github.com/bogdanfinn/tls-client-api) that mimics Chrome 112's TLS fingerprint, making requests indistinguishable from a real browser.
+
+2. **Cookie-Based Authentication**: Instead of automating the login flow (which requires SMS 2FA), the library uses four long-lived cookies that remain valid for a year:
+   - `ubid-main` - User browser ID
+   - `at-main` - Authentication token
+   - `x-main` - Additional authentication token
+   - `session-id` - Session identifier
+
+3. **Dual Session Management**: The library maintains two types of session tokens:
+   - **Session ID** (`x-amzn-sessionid` header): Obtained from the books endpoint, required for all subsequent API calls
+   - **ADP Session Token** (`x-adp-session-token` header): Obtained from device registration, required for accessing book metadata
+
+4. **HTTP Client Proxy Pattern**: All requests go through the TLS proxy which:
+   - Receives request parameters (URL, headers, method)
+   - Applies Chrome 112 TLS fingerprint
+   - Forwards to Amazon with proper browser-like characteristics
+   - Returns response data to the library
+
+5. **Pagination Support**: The books endpoint returns a `paginationToken` that can be used to fetch additional pages of books.
+
+6. **Lazy Loading**: Book details are fetched on-demand with two different levels of detail (see detailed comparison below)
+
+This architecture allows the library to operate without headless browsers, making it significantly faster and more lightweight while remaining undetectable to Amazon's bot protection systems.
+
+### `book.details()` vs `book.fullDetails()`
+
+The library provides two methods for fetching book information, optimized for different use cases:
+
+#### `book.details()` - Lightweight Progress Check
+- **API Calls**: 1 request to `/service/mobile/reader/startReading`
+- **Response Format**: JSON
+- **Use Case**: Quick checks for whether a book has been read since last sync
+- **Returns**:
+  - Basic book info (title, ASIN, authors, cover URLs)
+  - Reading progress position (raw number)
+  - Last sync timestamp and device name
+  - Metadata URL for further requests
+
+**Example**: Checking if any of your books have been read today
+```typescript
+const details = await book.details();
+if (details.progress.syncDate > lastCheckTime) {
+  console.log(`${book.title} was read on ${details.progress.reportedOnDevice}`);
+}
+```
+
+#### `book.fullDetails()` - Complete Book Information
+- **API Calls**: 2 requests (or 1 if you pass in cached details)
+  1. First request: Same as `details()` (can be skipped if you pass cached details)
+  2. Second request: JSONP endpoint at the `metadataUrl` 
+- **Response Format**: JSONP (wrapped JSON that needs parsing)
+- **Use Case**: Getting complete book information including calculated reading progress percentage
+- **Returns**: Everything from `details()` plus:
+  - **Reading percentage** (calculated from position / endPosition)
+  - Publisher information
+  - Release date
+  - Start position (where actual content begins)
+  - End position (total book length)
+
+**Example**: Tracking detailed reading progress
+```typescript
+const fullDetails = await book.fullDetails();
+console.log(`${book.title}: ${fullDetails.percentageRead}% complete`);
+console.log(`Published by ${fullDetails.publisher} on ${fullDetails.releaseDate}`);
+```
+
+**Performance Tip**: If you already called `details()`, pass it to `fullDetails()` to avoid the duplicate request:
+```typescript
+const details = await book.details();
+// ... do something with details ...
+const fullDetails = await book.fullDetails(details); // Reuses the first call
+```
+
+#### Quick Comparison Table
+
+| Feature | `details()` | `fullDetails()` |
+|---------|-------------|-----------------|
+| API Requests | 1 | 2 (or 1 if cached) |
+| Reading Progress | ✅ Raw position | ✅ Percentage (0-100%) |
+| Sync Timestamp | ✅ | ✅ |
+| Device Name | ✅ | ✅ |
+| Publisher | ❌ | ✅ |
+| Release Date | ❌ | ✅ |
+| Book Length (positions) | ❌ | ✅ |
+| Response Time | ~100-200ms | ~200-400ms |
+| Best For | Checking if book was read | Getting complete progress info |
+
 ## Installation
 
 ```
