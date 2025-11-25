@@ -1,6 +1,7 @@
 name: Build and Commit Dist
 
 on:
+  workflow_dispatch:  # Manual trigger from GitHub UI
   push:
     branches: [main, master]
     paths:
