@@ -47,7 +47,9 @@ export class Kindle {
             : config.cookies;
         const client = config.clientFactory?.(cookies, config.tlsServer) ??
             new HttpClient(cookies, config.tlsServer);
-        const { sessionId, books } = await Kindle.baseRequest(client);
+        const { sessionId, books } = await Kindle.baseRequest(client, undefined, {
+            filter: { querySize: config.querySize ?? 50 },
+        });
         client.updateSession(sessionId);
         const deviceInfo = await Kindle.deviceToken(client, config.deviceToken);
         client.updateAdpSession(deviceInfo.deviceSessionToken);
