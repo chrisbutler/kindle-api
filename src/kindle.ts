@@ -69,7 +69,7 @@ export class Kindle {
   public static DEVICE_TOKEN_URL =
     "https://read.amazon.com/service/web/register/getDeviceToken";
   public static readonly BOOKS_URL =
-    "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS&sortType=recency";
+    "https://read.amazon.com/kindle-library/search?query=&libraryType=BOOKS";
   public static readonly DEFAULT_QUERY = Object.freeze({
     sortType: "recency",
   } satisfies Query);
